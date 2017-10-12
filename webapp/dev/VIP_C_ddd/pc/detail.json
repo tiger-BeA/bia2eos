@@ -1,0 +1,41 @@
+{
+    "name": "EOS_VIP_C_ddd.js",
+    "platform": 1,
+    "onlineLink": "https://mimg.127.net/pub/common/eos/EOS_VIP_C_ddd.js",
+    "pc": {
+        "libC": [],
+        "libJ": []
+    },
+    "h5": {
+        "libC": [],
+        "libJ": []
+    },
+    "auto": [
+        {
+            "className": "",
+            "attr": []
+        }
+    ],
+    "detail": [
+        {
+            "funcName": "",
+            "explain": "",
+            "param": false,
+            "params": [
+                {
+                    "name": "",
+                    "explain": "",
+                    "type": "",
+                    "isRequired": true
+                }
+            ],
+            "sonFunc": [
+                {
+                    "name": "",
+                    "explain": "",
+                    "params": []
+                }
+            ]
+        }
+    ]
+}

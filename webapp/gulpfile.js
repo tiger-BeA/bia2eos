@@ -1,3 +1,6 @@
+const mRollup = require('./config/rollup.config');
+const serverConfig = require('./config/uri');
+
 const gulp = require('gulp');
 const path = require('path');
 const plugins = require('gulp-load-plugins'),
@@ -5,23 +8,31 @@ const plugins = require('gulp-load-plugins'),
 const glob = require('glob');
 const cssnext = require('postcss-cssnext');
 const cssnano = require('cssnano');
-const traverse = require('through-gulp');
 const pngquant = require('imagemin-pngquant');
 const os = require('os');
-const mRollup = require('./config/rollup.config');
-const serverConfig = require('./config/uri');
+const through = require('through2');
 const browser = os.platform() === 'linux' ? 'google-chrome' : (
     os.platform() === 'darwin' ? 'google chrome' : (
         os.platform() === 'win32' ? 'chrome' : 'firefox'));
-const rGetJsFile = (_dir) => {
-    return glob.sync(_dir, { nodir: true, sync: true });
+
+const rGetFile = (_dir) => {
+    return glob(_dir, { nodir: true, sync: true });
 }
-const jsPath = rGetJsFile(path.resolve(__dirname, './dist/**/*.js')).map((_dir) => {
-    return path.relative(path.resolve(__dirname, './dist/'), _dir);
+const rGetDir = (_dir) => {
+    return glob(_dir, { sync: true });
+}
+
+const rHtmlPath = rGetDir(path.resolve(__dirname, './dist/*/*/')).map((_dir) => {
+    return _dir;
 });
-const cssPath = rGetJsFile(path.resolve(__dirname, './dist/**/*.css')).map((_dir) => {
-    return path.relative(path.resolve(__dirname, './dist/'), _dir);
-});
+const serverPort = (() => {
+    let serverPort = [],
+        _port = serverConfig.port;
+    for (let idx in rHtmlPath) {
+        serverPort.push(_port++);
+    }
+    return serverPort;
+})();
 
 gulp.task('img', () => {
     return gulp.src(path.resolve(__dirname, './dev/**/img/*.*(png|jpg|gif|ico)'))
@@ -70,9 +81,9 @@ gulp.task('css', () => {
 });
 
 gulp.task('js', () => {
-    const _task = rGetJsFile(path.resolve(__dirname, './dev/*/*.es6')).map((fileDir) => {
+    const _task = rGetFile(path.resolve(__dirname, './dev/**/*.es6')).map((fileDir) => {
         let _dir = path.normalize(fileDir),
-            _lastDir = _dir.split(path.sep).slice(-2, -1);
+            _lastDir = _dir.split(path.sep).slice(-3, -1).join('/')
         return gulp.src(_dir)
             .pipe($.plumber({
                 errorHandler: $.notify.onError("Error-img: <%= error %>")
@@ -86,17 +97,21 @@ gulp.task('js', () => {
 });
 
 gulp.task('html', () => {
-    return gulp.src(path.resolve(__dirname, './index.tpl'))
-        .pipe($.htmlReplace({
-            js: jsPath,
-            css: cssPath
+    return gulp.src(path.resolve(__dirname, './dev/**/index.tpl'))
+        .pipe(through.obj((file, env, cb) => {
+            console.log(rGetFile(path.resolve(path.dirname(file.path), './*.js')))
+            $.htmlReplace({
+                js: rGetFile(path.resolve(path.dirname(file.path), './*.js')),
+                css: file.path
+            })
+            cb();
         }))
         .pipe($.rename({ extname: '.html' }))
         .pipe(gulp.dest('./dist/'));
 });
 
 gulp.task('moveJs', () => {
-    return gulp.src(path.resolve(__dirname, `./dev/*/*.es6`))
+    return gulp.src(path.resolve(__dirname, `./dev/**/*.es6`))
         .pipe($.plumber({
             errorHandler: $.notify.onError("Error: <%= error %>")
         }))
@@ -104,7 +119,7 @@ gulp.task('moveJs', () => {
 });
 
 gulp.task('moveCss', () => {
-    return gulp.src(path.resolve(__dirname, `./dev/*/*.scss`))
+    return gulp.src(path.resolve(__dirname, `./dev/**/*.scss`))
         .pipe($.plumber({
             errorHandler: $.notify.onError("Error: <%= error %>")
         }))
@@ -112,7 +127,7 @@ gulp.task('moveCss', () => {
 });
 
 gulp.task('movecomponents', () => {
-    return gulp.src([path.resolve(__dirname, `./dev/!(img)**/*`), path.resolve(__dirname, `./dist/**/*`)])
+    return gulp.src([path.resolve(__dirname, `./dev/**!(img)/*`), path.resolve(__dirname, `./dist/**/**`)])
         .pipe($.plumber({
             errorHandler: $.notify.onError("Error: <%= error %>")
         }))
@@ -125,24 +140,29 @@ gulp.task('clean', () => {
 });
 
 gulp.task('webserver', () => {
-    gulp.src('./dist/')
-        .pipe($.webserver({
-            port: serverConfig.port,
-            host: serverConfig.host,
-            livereload: true,
-            directoryListing: {
-                path: './dist/index.html',
-                enable: true
-            }
-        }));
+    rHtmlPath.forEach((v, idx) => {
+        console.log(v)
+        return gulp.src(`${v}/*`)
+            .pipe($.webserver({
+                post: serverPort[idx],
+                host: serverConfig.host,
+                livereload: true,
+                directoryListing: {
+                    path: './index.html',
+                    enable: true
+                }
+            }));
+    })
 });
 
 gulp.task('browser', () => {
-    gulp.src(__filename)
-        .pipe($.open({
-            uri: `${serverConfig.host}:${serverConfig.port}`,
-            app: browser
-        }));
+    serverPort.forEach((v, idx) => {
+        return gulp.src(__filename)
+            .pipe($.open({
+                uri: `${serverConfig.host}:${v}`,
+                app: browser
+            }));
+    });
 });
 
 gulp.task('watch', () => {
@@ -150,7 +170,7 @@ gulp.task('watch', () => {
     gulp.watch('./dev/**/*.scss', ['css', 'js']);
     gulp.watch('./dev/**/*.es6', ['js']);
     gulp.watch('./dev/**/img/*', ['img']);
-    gulp.watch(['./index.tpl'], ['html']);
+    gulp.watch('./dev/**/index.tpl', ['html']);
 });
 
 gulp.task('default', $.sequence('clean', ['img', 'css', 'js', 'watch'], 'html', ['browser', 'webserver']));
